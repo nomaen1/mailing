@@ -1,0 +1,4 @@
+venv
+.env
+contacts.py
+user.db
