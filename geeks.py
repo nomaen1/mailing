@@ -1,17 +1,19 @@
 from aiogram import Bot, Dispatcher, types, executor
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
-from aiogram.dispatcher.filters.state import StatesGroup,State
+from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
-import sqlite3
 import logging
 import os
+import asyncio
+import aioschedule
 
 load_dotenv('.env')
 
 bot = Bot(os.environ.get('token'))
-dp = Dispatcher(bot,storage=MemoryStorage())
+dp = Dispatcher(bot, storage=MemoryStorage())
+storage = MemoryStorage()
 logging.basicConfig(level=logging.INFO)
 
 buttons = [
@@ -29,12 +31,6 @@ enroll = [
 ]
 
 enroll_button = InlineKeyboardMarkup().add(*enroll)
-
-num_button = [
-    KeyboardButton('Подтвердить номер', request_contact=True)
-]
-
-number = ReplyKeyboardMarkup(resize_keyboard=True).add(*num_button)
 
 @dp.message_handler(commands=["start"])
 async def start(message:types.Message):
@@ -54,10 +50,7 @@ async def inline(call):
     elif call.data == 'ios':
         await ios(call.message)
     elif call.data == 'enroll_student':
-        await get_enrolled(call.message)
-
-class BackendCourse(StatesGroup):
-    backend = State()
+        await enroll_get(call.message)
 
 @dp.message_handler(commands=['backend'])
 async def back(message:types.Message):
@@ -89,20 +82,37 @@ async def ios(message:types.Message):
     await message.answer('Стоимость обучения: 8.000 сом в месяц.')
     await message.answer('Срок обучения: 7 месяцев.', reply_markup=enroll_button)
 
-@dp.message_handler(commands='enroll')
-async def get_enrolled(message:types.Message):
-    await message.answer('Отправьте свои данные: фамилия,  имя, номер телефона')
-    await BackendCourse.backend.set()
+class EnrollState(StatesGroup):
+    data = State()
 
+@dp.message_handler(commands=['enroll'])
+async def enroll_get(message:types.Message):
+    await message.reply("Оставьте свои контакты в формате: имя, фамилия и номер\nИ мы скоро с вами свяжемся")
+    await EnrollState.data.set()
 
-@dp.message_handler(state=BackendCourse.backend)
-async def course_pon(message:types.Message, state : FSMContext ):
-    id_chat = "-964627083"
-    try:
-        await bot.send_message(chat_id=int(id_chat), text=message.text)
-        await state.finish()
-    except:
-        await message.answer("Произошла ошибка")
-        await state.finish()
+@dp.message_handler(state=EnrollState.data)
+async def send_enroll(message:types.Message, state:FSMContext):
+    print(message.text)
+    await bot.send_message(-964627083, f"Заявка на курсы:\n{message.text}")
+    await message.answer('Спасибо ваши данные успешно записаны')
+    await state.finish()
 
-executor.start_polling(dp)
+async def send_message():
+    await bot.send_message(-964627083, "Здраствуйте, у вас сегодя урок в 20:00")
+
+async def scheduler():
+    # aioschedule.every().day.at("12:00").do(send_message)
+    aioschedule.every(5).seconds.do(send_message)
+    # aioschedule.every().wednesday.at('21:08').do(send_message)
+    while True:
+        await aioschedule.run_pending()
+        await asyncio.sleep(1)
+
+async def on_startup(_):
+    asyncio.create_task(scheduler())
+
+@dp.message_handler()
+async def nothing(message:types.Message):
+    await message.answer('')
+    
+executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
