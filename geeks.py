@@ -101,9 +101,8 @@ async def course_pon(message:types.Message, state : FSMContext ):
     try:
         await bot.send_message(chat_id=int(id_chat), text=message.text)
         await state.finish()
-
     except:
-        await message.answer("Произашла ошибка")
+        await message.answer("Произошла ошибка")
         await state.finish()
 
 executor.start_polling(dp)
