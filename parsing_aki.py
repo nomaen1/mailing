@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 import requests
 
+
 url = "https://akipress.org/"
 response = requests.get(url)
 soup = BeautifulSoup(response.text, 'lxml')
